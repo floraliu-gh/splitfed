@@ -19,8 +19,6 @@ class CommunicationChannel:
         self.rician_k     = rician_k
         self.block_fading = block_fading # 啟用 Block Fading
 
-    # ── Fading helpers ────────────────────────────────────────────────────────
-
     def _rayleigh_gain(self, shape, device):
         # 模擬 Block Fading，同一張圖片(Batch 內的一個樣本)共用同一個衰落係數
         if self.block_fading and len(shape) == 4:
@@ -53,8 +51,6 @@ class CommunicationChannel:
         theta = torch.randn_like(x) * phase_std
         return x * torch.cos(theta)
 
-    # ── AWGN（共用）────────────────────────────────────────────────────────────
-
     def add_awgn_noise(self, x):
         if self.snr_db > 100:
             return x
@@ -66,8 +62,6 @@ class CommunicationChannel:
         noise_std   = torch.sqrt(noise_power)
         noise       = torch.randn_like(x) * noise_std
         return x + noise
-
-    # ── Bit error（不變）─────────────────────────────────────────────────────
 
     def add_bit_errors(self, x, num_bits=8):
         if self.ber <= 0.0:
@@ -84,8 +78,6 @@ class CommunicationChannel:
             final_flip_mask = final_flip_mask | (flip_decision << b)
         x_int_corrupted = x_int ^ final_flip_mask
         return x_int_corrupted.float() / scale + x_min
-
-    # ── 主要 transmit 介面 ────────────────────────────────────────────────────
 
     def transmit(self, x, add_awgn=True, add_bit_error=False):
         device = x.device
@@ -113,10 +105,6 @@ class CommunicationChannel:
             y = self.add_bit_errors(y)
         return y
 
-
-# ==========================================
-# 確保你原本的類別都有保留！
-# ==========================================
 class PixelNoiseInjector:
     def __init__(self, noise_std=0.1):
         self.noise_std = noise_std
@@ -187,10 +175,6 @@ class MMSEDenoiser:
     def reset_client(self): pass
     def reset(self): pass
 
-
-# ==========================================
-# 新增的特徵量化器 (模擬通訊負載壓縮)
-# ==========================================
 class FeatureQuantizer:
     def __init__(self, num_bits=8):
         self.num_bits = num_bits
