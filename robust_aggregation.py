@@ -2,9 +2,6 @@ import copy
 import torch
 
 def fedavg(client_models, nk_list, n):
-    """
-    標準 FedAvg: 加權平均聚合
-    """
     global_model = copy.deepcopy(client_models[0])
     global_dict = global_model.state_dict()
 
@@ -27,10 +24,6 @@ def fedavg(client_models, nk_list, n):
 
 
 def fed_median(client_models):
-    """
-    中位數聚合: 對每個參數取中位數
-    優點: 對異常值(outliers)更魯棒,適合有雜訊的環境
-    """
     global_model = copy.deepcopy(client_models[0])
     global_dict = global_model.state_dict()
     
@@ -51,11 +44,6 @@ def fed_median(client_models):
 
 
 def fed_trimmed_mean(client_models, nk_list, n, trim_ratio=0.2):
-    """
-    修剪平均聚合: 去掉最大和最小的極端值後平均
-    參數:
-    - trim_ratio: 要修剪的比例 (0.0-0.5)
-    """
     K = len(client_models)
     trim_count = int(K * trim_ratio)
     
@@ -87,12 +75,6 @@ def fed_trimmed_mean(client_models, nk_list, n, trim_ratio=0.2):
 
 
 def fed_krum(client_models, f=1):
-    """
-    Krum 聚合: 選擇與其他模型最接近的一個
-    參數:
-    - f: 容許的拜占庭節點數量
-    適合有惡意節點的情況
-    """
     K = len(client_models)
     
     # 計算每對模型之間的距離
@@ -125,11 +107,6 @@ def fed_krum(client_models, f=1):
 
 
 def fedserver(client_models, nk_list, n, method='fedavg', **kwargs):
-    """
-    統一的聚合介面
-    參數:
-    - method: 'fedavg', 'median', 'trimmed_mean', 'krum'
-    """
     if method == 'fedavg':
         return fedavg(client_models, nk_list, n)
     elif method == 'median':
