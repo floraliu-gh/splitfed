@@ -33,12 +33,12 @@ EXPERIMENT_NAME = (
     + ("WithDenoising" if ENABLE_FORWARD_SCALING else "NoDenoising")
     + ("_LearnedDenoise" if ENABLE_LEARNED_DENOISER else "")
 )
-SNR_LIST = [15]
+SNR_LIST = [0, 5, 10, 15]
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 K            = 5
-rounds       = 1
+rounds       = 70
 local_epochs = 3
 batch_size   = 128
 lr           = 0.002
