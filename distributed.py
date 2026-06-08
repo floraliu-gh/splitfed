@@ -1,12 +1,3 @@
-# Distributed Learning (Federated Split Learning)
-# Pipeline:
-#   Client -> ClientModel -> [feature activations -> noisy channel] -> ServerModel
-#          -> ServerModel trains -> [gradients -> noisy channel] -> Client
-#          -> ClientModel backward -> FedAvg aggregation
-#
-# 與 Centralized 的差別：raw data 永遠不離開 client；
-# 傳輸 feature activations，不是 raw pixels；Server 看不到原始影像。
-
 import torch
 import torch.nn as nn
 import numpy as np
@@ -100,10 +91,6 @@ def run_hardware_analysis():
 
     del c_part, s_part
 
-
-# ─────────────────────────────────────────
-#  Activation Reconstruction Decoder (for visualization only)
-# ─────────────────────────────────────────
 class ActivationDecoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -117,7 +104,6 @@ class ActivationDecoder(nn.Module):
 
     def forward(self, x):
         return self.decoder(x)
-
 
 def train_decoder(c_model, dataloader, steps=1000):
     decoder   = ActivationDecoder().to(device)
@@ -152,11 +138,9 @@ def train_decoder(c_model, dataloader, steps=1000):
     decoder.eval()
     return decoder
 
-
 def psnr(a, b):
     mse = np.mean((a.astype(np.float32) - b.astype(np.float32)) ** 2)
     return float('inf') if mse == 0 else 20 * np.log10(1.0 / np.sqrt(mse))
-
 
 def build_reconstruction_figure(c_model, decoder, channel, snr_db, x_single):
     c_model.eval()
@@ -216,10 +200,6 @@ def build_reconstruction_figure(c_model, decoder, channel, snr_db, x_single):
     plt.tight_layout()
     return fig
 
-
-# ─────────────────────────────────────────
-#  Evaluate: clean inference (no channel noise)
-# ─────────────────────────────────────────
 def evaluate(c_model, s_model, loader):
     c_model.eval()
     s_model.eval()
@@ -242,10 +222,6 @@ def evaluate(c_model, s_model, loader):
     pix_acc = correct / max(total, 1)
     return pix_acc, miou
 
-
-# ─────────────────────────────────────────
-#  Transmit model weights through noisy channel
-# ─────────────────────────────────────────
 def transmit_weights_through_channel(model, channel):
     params       = [p.data for p in model.parameters()]
     shapes       = [p.shape for p in params]
@@ -270,10 +246,6 @@ def transmit_weights_through_channel(model, channel):
     rx_model.load_state_dict(received_sd, strict=False)
     return rx_model
 
-
-# ─────────────────────────────────────────
-#  Main
-# ─────────────────────────────────────────
 if __name__ == '__main__':
     print(f"[Distributed / Federated Split Learning] Device: {device}")
     print(f"Channel: {CHANNEL_TYPE.upper()}  |  SNR sweep: {SNR_LIST}")
