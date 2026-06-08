@@ -30,11 +30,6 @@ NUM_CLASSES  = 7
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
-# ─────────────────────────────────────────
-#  Full model: ClientModel + ServerModel in series
-#  Server holds this entire model for centralized training
-# ─────────────────────────────────────────
 class FullModel(nn.Module):
     def __init__(self, num_classes=7):
         super().__init__()
@@ -44,10 +39,6 @@ class FullModel(nn.Module):
     def forward(self, x):
         return self.server_part(self.client_part(x))
 
-
-# ─────────────────────────────────────────
-#  Centralized Server
-# ─────────────────────────────────────────
 class CentralizedServer:
     def __init__(self, lr=LR):
         self.model     = FullModel(num_classes=NUM_CLASSES).to(device)
@@ -93,11 +84,6 @@ class CentralizedServer:
         pix_acc = correct / max(total, 1)
         return pix_acc, miou
 
-
-# ─────────────────────────────────────────
-#  Centralized Client
-#  Only transmits raw pixels; no local training
-# ─────────────────────────────────────────
 class CentralizedClient:
     def __init__(self, client_id, dataset, channel):
         self.client_id = client_id
@@ -113,10 +99,6 @@ class CentralizedClient:
         x_rx = torch.clamp(x_rx, -3.0, 3.0)
         return x_rx
 
-
-# ─────────────────────────────────────────
-#  DeepGlobe class colors (6 classes + unknown)
-# ─────────────────────────────────────────
 DEEPGLOBE_COLORS = np.array([
     [0,   255, 255],   # 0 urban
     [255, 255,   0],   # 1 agriculture
