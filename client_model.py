@@ -3,11 +3,6 @@ import torch.nn as nn
 
 
 class ClientModel(nn.Module):
-    """
-    Client 端輕量特徵提取器。
-    輸入：(B, 3, 64, 64)
-    輸出：(B, 64, 16, 16)  ← 供 ServerModel 的 ViT 處理
-    """
     def __init__(self):
         super().__init__()
         self.net = nn.Sequential(
