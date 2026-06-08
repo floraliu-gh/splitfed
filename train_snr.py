@@ -47,32 +47,17 @@ server_lr    = 0.0005
 CHANNEL_GAIN   = 1.0
 BIT_ERROR_RATE = 0.001
 
-# 存在 main.py 旁邊，不管從哪裡執行都找得到
 RESULT_FILE     = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'experiment_results.csv')
 ROUND_LOG_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'round_log.csv')
 SUMMARY_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'summary.csv')
 
-
-# ============================================================
-#  CSV 寫入工具
-# ============================================================
 def write_row(filepath, row_dict):
-    """
-    將一筆資料 append 進 CSV。
-    - 檔案不存在時自動建立（含表頭）
-    - 已存在時直接 append，不重寫整個檔案（速度快、不鎖檔）
-    """
     file_exists = Path(filepath).exists()
     df = pd.DataFrame([row_dict])
     df.to_csv(filepath, mode='a', header=not file_exists, index=False)
 
 
 def overwrite_round_row(filepath, row_dict):
-    """
-    每輪結束時「更新」同一個 SNR 的那一列進度。
-    若該 (experiment, snr_db, round) 已存在則先刪除再寫入，
-    確保同一輪不會重複累積。
-    """
     if Path(filepath).exists():
         df = pd.read_csv(filepath)
         mask = (
@@ -88,16 +73,8 @@ def overwrite_round_row(filepath, row_dict):
     df_out = pd.concat([df, df_new], ignore_index=True)
     df_out.to_csv(filepath, index=False)
 
-
-# ============================================================
-#  結果摘要：終端機表格 + 精簡 CSV
-# ============================================================
 def print_and_save_summary(all_results, snr_vals, comm_metrics_by_snr,
                            experiment_name, channel_type):
-    """
-    跑完所有 SNR 後，在終端機印出清楚的摘要表，
-    並另存 summary.csv（只保留最重要的欄位）。
-    """
     SEP  = "=" * 100
     sep2 = "-" * 100
 
@@ -105,7 +82,6 @@ def print_and_save_summary(all_results, snr_vals, comm_metrics_by_snr,
     print(f"  實驗結果摘要  |  {experiment_name}  |  Channel: {channel_type.upper()}")
     print(SEP)
 
-    # ── 第一表：分割效果 ──────────────────────────────────────
     print(f"\n{'SNR (dB)':>10} │ {'Sem Acc (%)':>12} │ {'Sem mIoU':>10} │ {'Train Loss':>11} │ {'Trad Acc (%)':>13} │ {'Trad mIoU':>10}")
     print(sep2)
     for s in snr_vals:
@@ -115,7 +91,7 @@ def print_and_save_summary(all_results, snr_vals, comm_metrics_by_snr,
     best_snr = max(snr_vals, key=lambda s: all_results[s]['miou'])
     print(f"  最佳 mIoU: SNR={best_snr}dB  →  {all_results[best_snr]['miou']:.4f}")
 
-    # ── 第二表：通訊效率 ──────────────────────────────────────
+
     print(f"\n{'SNR (dB)':>10} │ {'通道容量(Mbps)':>15} │ {'傳統延遲(ms)':>14} │ {'語意延遲(ms)':>14} │ {'延遲縮短':>10} │ {'壓縮比':>8}")
     print(sep2)
     for s in snr_vals:
@@ -125,7 +101,6 @@ def print_and_save_summary(all_results, snr_vals, comm_metrics_by_snr,
     print(f"  資料量：傳統(fp32) = {comm_metrics_by_snr[snr_vals[0]]['img_payload_kbits']} Kbits  │  語意(int8) = {comm_metrics_by_snr[snr_vals[0]]['feat_int8_kbits']} Kbits  │  通道頻寬假設 = {comm_metrics_by_snr[snr_vals[0]]['channel_bw_mhz']} MHz")
     print(SEP)
 
-    # ── 精簡 CSV ──────────────────────────────────────────────
     rows = []
     for s in snr_vals:
         r = all_results[s]
@@ -148,10 +123,6 @@ def print_and_save_summary(all_results, snr_vals, comm_metrics_by_snr,
     print(f"\n  精簡摘要已存至: {SUMMARY_FILE}")
     print(f"  完整資料已存至: {RESULT_FILE}")
 
-
-# ============================================================
-#  評估函式
-# ============================================================
 def evaluate(c_model, s_model, loader):
     c_model.eval(); s_model.eval()
     total_pixels, correct_pixels = 0, 0
@@ -203,9 +174,6 @@ def evaluate_traditional(c_model, s_model, loader, channel, device):
     return pixel_acc, miou
 
 
-# ============================================================
-#  硬體分析
-# ============================================================
 def run_hardware_analysis(client_model, server_model):
     print("\n=== Hardware & Performance Analysis Report ===")
     dummy_c = torch.randn(1, 3, 64, 64).to(device)
@@ -245,33 +213,7 @@ def run_hardware_analysis(client_model, server_model):
         'total_latency_ms':  round(lc + ls, 3),
     }
 
-# ============================================================
-#  頻寬與傳輸延遲計算
-# ============================================================
 def compute_comm_metrics(snr_db, channel_bw_hz=1e6):
-    """
-    計算語意通訊 vs 傳統通訊的頻寬使用量與傳輸延遲。
-
-    資料量：
-      - 傳統通訊：原始影像 fp32  = 3×64×64×32 bits = 393,216 bits
-      - 語意通訊：特徵向量 fp32  = 64×16×16×32 bits = 524,288 bits
-      - 語意通訊：特徵向量 int8  = 64×16×16×8  bits = 131,072 bits
-        （int8 量化後比原始影像小 3×，這才是語意通訊的壓縮優勢）
-
-    通道速率（Shannon 公式）：
-      C = B × log2(1 + SNR_linear)   [bits/s]
-
-    傳輸延遲 = 資料量 / C   [ms]
-
-    Parameters
-    ----------
-    snr_db        : float   訊雜比（dB）
-    channel_bw_hz : float   通道頻寬（Hz），預設 1 MHz
-
-    Returns
-    -------
-    dict  包含資料量、通道容量、延遲等指標
-    """
     # 資料量（bits）
     img_bits      = 3 * 64 * 64 * 32       # 原始影像 fp32
     feat_fp32_bits = 64 * 16 * 16 * 32     # 特徵 fp32
@@ -312,10 +254,6 @@ def compute_comm_metrics(snr_db, channel_bw_hz=1e6):
         'latency_reduction_x':    round(trad_latency_ms / sem_int8_latency_ms, 2),
     }
 
-
-# ============================================================
-#  ActivationDecoder（特徵重建視覺化用）
-# ============================================================
 class ActivationDecoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -330,16 +268,7 @@ class ActivationDecoder(nn.Module):
     def forward(self, x):
         return self.decoder(x)
 
-
-# ============================================================
-#  特徵重建（收集結果，最後統一畫圖）
-# ============================================================
 def visualize_reconstruction(client, x_single, device, snr_db_label, decoder):
-    """
-    用已訓練好的 decoder，對單一 SNR 輸出一張 1×4 比較圖：
-      Original | Reconstructed: Clean | Reconstructed: Noisy | Reconstructed: SNR Scaled
-    所有 SNR 傳入同一個 x_single 和同一個 decoder，確保可以直接比較。
-    """
     mean_np = np.array([0.344, 0.380, 0.407])
     std_np  = np.array([0.203, 0.136, 0.114])
 
@@ -398,10 +327,6 @@ def visualize_reconstruction(client, x_single, device, snr_db_label, decoder):
           f'Clean={psnr_c:.1f}dB  Noisy={psnr_n:.1f}dB  ' 
           f'SNR-Scaled={psnr_d:.1f}dB (Δ{delta:+.1f}dB)')
 
-
-# ============================================================
-#  Main
-# ============================================================
 if __name__ == '__main__':
     print(f"[{EXPERIMENT_NAME}] device={device}")
     print(f"Channel={CHANNEL_TYPE.upper()}  "
@@ -448,10 +373,6 @@ if __name__ == '__main__':
     fixed_vis_batch, _ = next(iter(test_loader))
     fixed_vis_batch    = fixed_vis_batch[0:1].to(device)   # 固定同一張圖，所有 SNR 共用
 
-    # 每個 SNR 各自訓練 decoder：
-    # 每個 SNR 訓練出來的 client model 特徵空間不同，
-    # 共用 decoder 會導致後續 SNR 的 Clean 重建也是亂碼。
-
     for SNR_DB in SNR_LIST:
         print(f"\n{'='*60}")
         print(f"  Training  SNR={SNR_DB}dB  Channel={CHANNEL_TYPE.upper()}")
@@ -481,8 +402,8 @@ if __name__ == '__main__':
 
         client_grad_ema = {i: None for i in range(K)}
         train_losses, test_accs, test_mious = [], [], []
-
-        # ── Training Loop ──────────────────────────────────────
+        
+        # Training loop
         for r in range(rounds):
             round_snrs = []
             for i in range(K):
@@ -559,7 +480,6 @@ if __name__ == '__main__':
             test_accs.append(acc); test_mious.append(miou)
             scheduler.step()
 
-            # ── 每輪結束立刻寫入進度（可隨時開 CSV 查看）────────
             overwrite_round_row(ROUND_LOG_FILE, {
                 'experiment':    EXPERIMENT_NAME,
                 'channel':       CHANNEL_TYPE,
@@ -574,12 +494,10 @@ if __name__ == '__main__':
             print(f"  [進度已更新] round_log.csv  Round {r+1}/{rounds}  "
                   f"Acc={acc*100:.2f}%  mIoU={miou:.4f}")
 
-        # ── 最終成績（最後 5 輪平均）──────────────────────────
         final_acc  = float(np.mean(test_accs[-5:]))
         final_miou = float(np.mean(test_mious[-5:]))
         final_loss = float(np.mean(train_losses[-5:]))
 
-        # ── 傳統通訊 Baseline ───────────────────────────────────
         print(f"\n[Traditional Baseline] SNR={SNR_DB}dB ...")
         trad_ch = CommunicationChannel(
             snr_db=SNR_DB, channel_gain=CHANNEL_GAIN, bit_error_rate=BIT_ERROR_RATE,
@@ -597,11 +515,9 @@ if __name__ == '__main__':
         print(f"[Semantic   ] Acc={final_acc*100:.2f}%  mIoU={final_miou:.4f}  Loss={final_loss:.4f}")
         print(f"[Traditional] Acc={trad_acc*100:.2f}%  mIoU={trad_miou:.4f}")
 
-        # ── 通訊指標 ───────────────────────────────────────────
         comm = compute_comm_metrics(SNR_DB, channel_bw_hz=1e6)
         comm_metrics_by_snr[SNR_DB] = comm
 
-        # ── SNR 結束後寫入最終結果 ─────────────────────────────
         per_round_acc  = ','.join(f'{v*100:.2f}' for v in test_accs)
         per_round_miou = ','.join(f'{v:.4f}'     for v in test_mious)
         per_round_loss = ','.join(f'{v:.4f}'     for v in train_losses)
@@ -649,8 +565,6 @@ if __name__ == '__main__':
         })
         print(f"[最終結果寫入] {RESULT_FILE}")
 
-        # ── 視覺化：每個 SNR 各自訓練 decoder，確保重建品質正確 ──
-        # 每個 SNR 的 client model 特徵空間不同，不能共用 decoder
         clients[0].channel.snr_db = SNR_DB   # 重置為標準值
         print(f"\n[Decoder Training] SNR={SNR_DB}dB  1000 steps...")
         _decoder = ActivationDecoder().to(device)
@@ -666,18 +580,14 @@ if __name__ == '__main__':
         visualize_reconstruction(
             clients[0], fixed_vis_batch, device, SNR_DB, _decoder)
 
-    # ============================================================
-    #  最終報表（格式化表格 + 精簡 CSV）
-    # ============================================================
     snr_vals = sorted(SNR_LIST)
     print_and_save_summary(all_results, snr_vals, comm_metrics_by_snr,
                            EXPERIMENT_NAME, CHANNEL_TYPE)
 
-    # ── 三指標對比圖 ──────────────────────────────────────────
-    sem_miou = [all_results[s]['miou']          for s in snr_vals]
-    sem_acc  = [all_results[s]['acc'] * 100      for s in snr_vals]
-    sem_loss = [all_results[s]['loss']           for s in snr_vals]
-    t_miou   = [all_results[s]['trad_miou']      for s in snr_vals]
+    sem_miou = [all_results[s]['miou']  for s in snr_vals]
+    sem_acc  = [all_results[s]['acc'] * 100  for s in snr_vals]
+    sem_loss = [all_results[s]['loss'] for s in snr_vals]
+    t_miou   = [all_results[s]['trad_miou'] for s in snr_vals]
     t_acc    = [all_results[s]['trad_acc'] * 100  for s in snr_vals]
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
@@ -708,8 +618,6 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     plt.show(block=False)
-
-
 
     print(f"\n[{EXPERIMENT_NAME}] Finished！")
     plt.show()
