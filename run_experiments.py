@@ -1,11 +1,3 @@
-"""
-實驗腳本: 比較不同通訊條件下的 SplitFed 性能
-測試項目:
-1. 不同 SNR 下的表現
-2. 不同聚合方法的魯棒性
-3. 去雜訊的效果
-"""
-
 import torch
 import numpy as np
 from torch.utils.data import DataLoader, random_split
@@ -22,12 +14,8 @@ from channel_simulation import CommunicationChannel, PixelNoiseInjector, Denoise
 
 
 def run_experiment(config):
-    """
-    執行單次實驗
-    """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
-    # 解析設定
+
     K = config['num_clients']
     rounds = config['rounds']
     local_epochs = config['local_epochs']
@@ -42,8 +30,7 @@ def run_experiment(config):
     print(f"\n{'='*60}")
     print(f"實驗: SNR={snr_db}dB, BER={ber}, Agg={aggregation_method}, Denoise={enable_denoising}")
     print(f"{'='*60}")
-    
-    # 資料準備
+
     transform = transforms.Compose([
         transforms.Resize((64, 64)),
         transforms.ToTensor(),
@@ -155,9 +142,6 @@ def run_experiment(config):
 
 
 def main():
-    """
-    主實驗流程
-    """
     # 基礎設定
     base_config = {
         'num_clients': 5,
@@ -275,7 +259,6 @@ def main():
         json.dump(all_results, f, indent=2)
     
     print("\n結果已儲存: experiment_results.json")
-
 
 if __name__ == '__main__':
     main()
