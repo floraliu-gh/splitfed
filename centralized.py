@@ -14,12 +14,12 @@ from deepglobe import DeepGlobeDataset
 
 CHANNEL_TYPE    = 'awgn'
 RICIAN_K_FACTOR = 2.0
-SNR_LIST        = [7,9,11,13]
+SNR_LIST        = [0,5,10,15]
 CHANNEL_GAIN    = 1.0
 BIT_ERROR_RATE  = 0.001
 
 NUM_CLIENTS  = 5
-ROUNDS       = 40
+ROUNDS       = 70
 LOCAL_EPOCHS = 3
 BATCH_SIZE   = 128
 LR           = 2e-3
